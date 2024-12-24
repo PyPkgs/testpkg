@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Unit Test",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "env": {},
+            "args": ["-s", "-x", "-ra", "--durations=10", "-vv", "${workspaceFolder}/tests/unit"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "Build",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/setup.py",
+            "env": {},
+            "args": ["sdist"],
+            "console": "integratedTerminal"
+        }
+    ]
+}

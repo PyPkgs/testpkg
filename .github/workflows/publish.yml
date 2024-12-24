@@ -1,0 +1,98 @@
+name: Publish
+
+on:
+  workflow_dispatch:  # Allows manual triggering of this workflow
+
+permissions:
+  contents: write
+
+jobs:
+  metadata:
+    name: Get runner id and tag the current code snapshot
+    env:
+        PKG_ACTION: TAG
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version_metadata.outputs.version }}
+      owner: ${{ steps.git_metadata.outputs.owner }}
+      homepage: ${{ steps.git_metadata.outputs.homepage }}
+      description: ${{ steps.setup_py_metadata.outputs.description }}
+      name: ${{ steps.setup_py_metadata.outputs.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - id: version_metadata
+        name: Tag and push current repo code
+        run: |
+          VER=$(cat VERSION)
+          echo "Repository version: $VER"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          
+          git tag "$VER"
+          git pull --tags -f
+          git push origin "$VER"
+      
+      - id: git_metadata
+        name: Get Metadata from git
+        run: |
+          OWNER=$(git config --get remote.origin.url | sed -e 's/.*github.com[/:]//' -e 's/\/.*$//')
+          echo "Repository owner: $OWNER"
+          echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
+          
+          HOMEPAGE=$(git config --get remote.origin.url | sed -e 's/^git@github.com:/https:\/\/github.com\//' -e 's/\.git$//')
+          echo "Repository homepage: $HOMEPAGE"
+          echo "homepage=$HOMEPAGE" >> "$GITHUB_OUTPUT"
+      
+      - id: setup_py_metadata
+        name: Get Metadata from setup.py
+        run: |
+          NAME=$(grep -oP "name\s*=\s*'[^']*'" setup.py | sed -e "s/name\s*=\s*'//" -e "s/'$//")
+          DESCRIPTION=$(grep -oP "description\s*=\s*'[^']*'" setup.py | sed -e "s/description\s*=\s*'//" -e "s/'$//")
+          
+          echo "Package Name: $NAME"
+          echo "Description: $DESCRIPTION"
+          
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+      
+    - name: Checkout pypi-server repository
+      uses: actions/checkout@v4
+      with:
+        repository: haim-shulner/pypi-server
+        token: ${{ secrets.PYPI_PAT }}
+        ref: main
+        path: .
+
+    - name: Register
+      env:
+        PKG_ACTION: REGISTER
+        PKG_NAME: ${{needs.metadata.outputs.name}}
+        PKG_VERSION: ${{needs.metadata.outputs.version}}
+        PKG_AUTHOR: ${{needs.metadata.outputs.owner}}
+        PKG_SHORT_DESC: ${{needs.metadata.outputs.description}}
+        PKG_HOMEPAGE: ${{needs.metadata.outputs.homepage}}
+      run: |
+        echo "name=$PKG_NAME"
+        pip install beautifulsoup4
+        python .github/actions.py 
+
+    - name: Commit and push pypi-server repository
+      env:
+        PKG_NAME: ${{needs.metadata.outputs.name}}
+        PKG_VERSION: ${{needs.metadata.outputs.version}}
+      run: |
+        export COMMIT_MESSAGE="Register ${{ env.PKG_NAME }}::${{ env.PKG_VERSION }} in PyPi index"
+        git config user.name "GitHub Actions Bot"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .
+        git commit -m "$COMMIT_MESSAGE"
+        git push
