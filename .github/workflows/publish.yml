@@ -1,4 +1,4 @@
-name: Publish
+name: Publish package
 
 on:
   workflow_dispatch:  # Allows manual triggering of this workflow
@@ -8,20 +8,20 @@ permissions:
 
 jobs:
   metadata:
-    name: Get runner id and tag the current code snapshot
+    name: Get package detailes
     env:
         PKG_ACTION: TAG
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version_metadata.outputs.version }}
-      owner: ${{ steps.git_metadata.outputs.owner }}
-      homepage: ${{ steps.git_metadata.outputs.homepage }}
-      description: ${{ steps.setup_py_metadata.outputs.description }}
-      name: ${{ steps.setup_py_metadata.outputs.name }}
+      version: ${{ steps.tagging.outputs.version }}
+      owner: ${{ steps.github.outputs.owner }}
+      homepage: ${{ steps.github.outputs.homepage }}
+      description: ${{ steps.package.outputs.description }}
+      name: ${{ steps.package.outputs.name }}
 
     steps:
       - uses: actions/checkout@v4
-      - id: version_metadata
+      - id: tagging
         name: Tag and push current repo code
         run: |
           VER=$(cat VERSION)
@@ -32,7 +32,7 @@ jobs:
           git pull --tags -f
           git push origin "$VER"
       
-      - id: git_metadata
+      - id: github
         name: Get Metadata from git
         run: |
           OWNER=$(git config --get remote.origin.url | sed -e 's/.*github.com[/:]//' -e 's/\/.*$//')
@@ -43,7 +43,7 @@ jobs:
           echo "Repository homepage: $HOMEPAGE"
           echo "homepage=$HOMEPAGE" >> "$GITHUB_OUTPUT"
       
-      - id: setup_py_metadata
+      - id: package
         name: Get Metadata from setup.py
         run: |
           NAME=$(grep -oP "name\s*=\s*'[^']*'" setup.py | sed -e "s/name\s*=\s*'//" -e "s/'$//")
